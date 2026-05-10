@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AoE4 War Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --gold: #c9a84c;
+  --gold-light: #e8c97a;
+  --gold-dim: #7a6030;
+  --bg: #0e0c09;
+  --bg2: #17140f;
+  --bg3: #211d15;
+  --border: rgba(201,168,76,0.15);
+  --border-strong: rgba(201,168,76,0.4);
+  --text: #e8dfc8;
+  --text-dim: #8a7f6a;
+  --red: #c24a3a;
+  --green: #4a9c6a;
+  --blue: #4a7ec2;
+  --radius: 6px;
+}
+
+body {
+  font-family: 'Crimson Pro', Georgia, serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border-strong);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header h1 {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  margin-right: auto;
+}
+
+.header h1 span { font-size: 14px; margin-left: 4px; opacity: 0.6; }
+
+select, button {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+select {
+  appearance: none;
+  background: var(--bg3) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%23c9a84c' stroke-width='1.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 8px 30px 8px 12px;
+  min-width: 180px;
+}
+select:focus { outline: 1px solid var(--gold); }
+
+#seasonSelect { min-width: 150px; }
+
+.refresh-btn {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--gold);
+  padding: 8px 16px;
+}
+.refresh-btn:hover { background: var(--bg3); }
+.refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Layout ── */
+.main { padding: 24px 28px; max-width: 1300px; margin: 0 auto; }
+
+/* ── Player meta ── */
+.player-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.player-name {
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold-light);
+}
+.player-sub { font-size: 14px; color: var(--text-dim); font-style: italic; }
+
+/* ── Account chips ── */
+.accounts-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 22px;
+}
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 11px;
+  font-size: 12px;
+  color: var(--text-dim);
+  transition: border-color 0.2s;
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold-dim); flex-shrink: 0; }
+.chip.ok { border-color: rgba(74,156,106,0.35); }
+.chip.ok .dot { background: var(--green); }
+.chip.err { border-color: rgba(194,74,58,0.35); }
+.chip.err .dot { background: var(--red); }
+.chip.loading .dot { background: var(--gold); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── Modes grid ── */
+.modes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 800px) { .modes-grid { grid-template-columns: 1fr; } }
+
+/* ── Mode panel ── */
+.mode-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+
+.mode-title {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 0.07em;
+}
+
+.tag {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  padding: 3px 9px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.tag-ranked { background: rgba(194,74,58,0.15); color: #e07060; border: 1px solid rgba(194,74,58,0.3); }
+.tag-qm     { background: rgba(74,126,194,0.15); color: #80aadf; border: 1px solid rgba(74,126,194,0.3); }
+
+/* ── Summary stats row ── */
+.stats-row {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.stat-box {
+  flex: 1;
+  padding: 14px 16px;
+  border-right: 1px solid var(--border);
+}
+.stat-box:last-child { border-right: none; }
+.stat-label {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+}
+.wr-good  { color: var(--green); }
+.wr-mid   { color: var(--gold); }
+.wr-bad   { color: var(--red); }
+
+/* ── Civ list ── */
+.civs-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-dim) var(--bg2);
+}
+
+.civ-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(201,168,76,0.06);
+  transition: background 0.1s;
+}
+.civ-row:last-child { border-bottom: none; }
+.civ-row:hover { background: rgba(201,168,76,0.04); }
+
+.civ-icon {
+  width: 28px; height: 28px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg3);
+}
+.civ-icon-fb {
+  width: 28px; height: 28px;
+  border-radius: 3px;
+  background: var(--bg3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: 'Cinzel', serif;
+}
+.civ-name { font-size: 13px; flex: 1; color: var(--text); }
+.civ-games { font-size: 12px; color: var(--text-dim); min-width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+.bar-wrap { width: 72px; height: 5px; background: var(--bg3); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.bar-fill { height: 100%; border-radius: 3px; }
+.civ-wr { font-size: 13px; font-weight: 600; min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.no-data { padding: 28px 16px; text-align: center; color: var(--text-dim); font-style: italic; font-size: 14px; }
+
+/* ── Loading / error ── */
+.loading-wrap {
+  text-align: center;
+  padding: 80px 20px;
+}
+.loading-title { font-family: 'Cinzel', serif; font-size: 16px; color: var(--gold); margin-bottom: 20px; }
+.progress-outer { width: 260px; height: 2px; background: var(--bg3); margin: 0 auto; border-radius: 2px; overflow: hidden; }
+.progress-inner { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.35s ease; }
+.progress-label { font-size: 13px; color: var(--text-dim); margin-top: 12px; font-style: italic; }
+
+.error-box {
+  background: rgba(194,74,58,0.1);
+  border: 1px solid rgba(194,74,58,0.3);
+  color: #e07060;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚔ AoE4 War Room <span>stats aggregator</span></h1>
+  <select id="playerSelect"></select>
+  <select id="seasonSelect">
+    <option value="all">All Seasons</option>
+  </select>
+  <button class="refresh-btn" id="refreshBtn">↺ Refresh</button>
+</div>
+
+<div class="main" id="main"></div>
+
+<script>
+// ── Data ────────────────────────────────────────────────────────────────────
+const PLAYERS = [
+  { player: "kingdin07", accounts: [
+    { name: "kingdin07",              id: 22916735 },
+    { name: "fade_Eyletmez",          id: 24418012 },
+    { name: "I_wanna_learn_all_civs", id: 24716634 },
+    { name: "dzabilli",               id: 25005747 },
+    { name: "Yae Miko",               id: 25069936 }
+  ]},
+  { player: "trajan", accounts: [
+    { name: "TRAJAN",              id: 3690352  },
+    { name: "Perfect Balance Civ", id: 24353301 }
+  ]},
+  { player: "kingmaker", accounts: [
+    { name: "Kingmaker", id: 1519555 }
+  ]},
+  { player: "sallybar", accounts: [
+    { name: "Sallybar",              id: 12166419 },
+    { name: "No_Brain_OPciv",        id: 23908152 },
+    { name: "my teammate is a dent", id: 22130492 },
+    { name: "Onlyspears",            id: 24649774 },
+    { name: "ABBA F TIER?",          id: 25332978 },
+    { name: "Washed up old man",     id: 24713680 }
+  ]},
+  { player: "EvilEvlinsky", accounts: [
+    { name: "EvilEvlinsky",    id: 8543471  },
+    { name: "EvilAuriane",     id: 23999544 },
+    { name: "EvilAurelie",     id: 23862653 },
+    { name: "FreeJannies",     id: 24983126 },
+    { name: "LGBTChicken9482", id: 25397667 },
+    { name: "JapaneseMom6603", id: 25280558 },
+    { name: "CheesySmurf7145", id: 24455613 },
+    { name: "Eugene Evil",     id: 23545826 }
+  ]}
+];
+
+const CIV_NAMES = {
+  abbasid: "Abbasid Dynasty", ayyubids: "Ayyubids",
+  byzantines: "Byzantines", chinese: "Chinese",
+  delhi: "Delhi Sultanate", english: "English",
+  french: "French", holy_roman_empire: "Holy Roman Empire",
+  japanese: "Japanese", jeanne_darc: "Jeanne d'Arc",
+  malians: "Malians", mongols: "Mongols",
+  order_of_the_dragon: "Order of the Dragon", ottomans: "Ottomans",
+  rus: "Rus", zhu_xi_legacy: "Zhu Xi's Legacy",
+  goldenhorde: "Golden Horde", lancaster: "House of Lancaster",
+  templar: "Knights Templar", macedonian: "Macedonian Dynasty",
+  sengoku: "Sengoku Daimyo", tughlaq: "Tughlaq Dynasty",
+  jindynasty: "Jin Dynasty",
+};
+
+// aoe4world uses hashed asset URLs; use their static CDN pattern
+function civIconUrl(civ) {
+  const slugMap = {
+    holy_roman_empire: "holy_roman_empire",
+    order_of_the_dragon: "order_of_the_dragon",
+    zhu_xi_legacy: "zhu_xis_legacy",
+    jeanne_darc: "jeanne_darc",
+    goldenhorde: "golden_horde",
+    lancaster: "house_of_lancaster",
+    templar: "knights_templar",
+    macedonian: "macedonian_dynasty",
+    sengoku: "sengoku_daimyo",
+    tughlaq: "tughlaq_dynasty",
+    jindynasty: "jin_dynasty",
+  };
+  const slug = slugMap[civ] || civ;
+  return `https://aoe4world.com/assets/images/civilizations/${slug}.png`;
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let chipStatus = {};
+let cachedAccounts = [];  // [{...acc, data}]
+let allSeasons = [];
+
+// ── Detect if we're on Vercel (production) or local ──────────────────────────
+// On Vercel, use our proxy /api/player?id=...
+// For local testing, fall back to direct aoe4world (will work if they allow CORS)
+async function fetchPlayer(id) {
+  // Try proxy first (works on Vercel); fall back to direct
+  const isVercel = !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1') && !window.location.protocol.includes('file');
+  const url = isVercel
+    ? `/api/player?id=${id}`
+    : `https://aoe4world.com/api/v0/players/${id}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// ── Season helpers ────────────────────────────────────────────────────────────
+function extractSeasons(data) {
+  const seasons = new Set();
+  if (!data || !data.modes) return seasons;
+  for (const modeKey of Object.keys(data.modes)) {
+    const mode = data.modes[modeKey];
+    if (Array.isArray(mode?.seasons)) {
+      mode.seasons.forEach(s => { if (s.season !== undefined) seasons.add(s.season); });
+    }
+  }
+  return seasons;
+}
+
+function buildSeasonOptions(accounts) {
+  const all = new Set();
+  for (const acc of accounts) {
+    if (!acc.data) continue;
+    extractSeasons(acc.data).forEach(s => all.add(s));
+  }
+  return Array.from(all).sort((a, b) => b - a);
+}
+
+// ── Aggregate ─────────────────────────────────────────────────────────────────
+// modeKey: 'rm_solo' or 'qm_1v1'
+// season: number | 'all'
+function aggregate(accounts, modeKey, season) {
+  let totalGames = 0, totalWins = 0;
+  const civMap = {};
+
+  for (const acc of accounts) {
+    if (!acc.data?.modes) continue;
+    const mode = acc.data.modes[modeKey];
+    if (!mode) continue;
+
+    let civStats = [];
+
+    if (season === 'all') {
+      // Use top-level civilizations array
+      totalGames += (mode.games_count || 0);
+      totalWins  += (mode.wins_count  || 0);
+      civStats = mode.civilizations || [];
+    } else {
+      // Find matching season entry
+      const seasonEntry = (mode.seasons || []).find(s => s.season === season);
+      if (!seasonEntry) continue;
+      totalGames += (seasonEntry.games_count || 0);
+      totalWins  += (seasonEntry.wins_count  || 0);
+      civStats = seasonEntry.civilizations || [];
+    }
+
+    for (const c of civStats) {
+      const key = c.civilization;
+      if (!key) continue;
+      if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
+      civMap[key].games += (c.games_count || 0);
+      civMap[key].wins  += (c.wins_count  || 0);
+    }
+  }
+
+  const civList = Object.entries(civMap)
+    .filter(([, v]) => v.games > 0)
+    .map(([civ, v]) => ({
+      civ,
+      games: v.games,
+      wins: v.wins,
+      winRate: (v.wins / v.games) * 100
+    }))
+    .sort((a, b) => b.games - a.games);
+
+  return { totalGames, totalWins, civList };
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+function wrClass(wr) {
+  if (wr >= 55) return 'wr-good';
+  if (wr >= 45) return 'wr-mid';
+  return 'wr-bad';
+}
+function barColor(wr) {
+  if (wr >= 55) return '#4a9c6a';
+  if (wr >= 45) return '#c9a84c';
+  return '#c24a3a';
+}
+
+function renderModePanel(label, tag, tagCls, stats) {
+  const wr = stats.totalGames > 0 ? (stats.totalWins / stats.totalGames) * 100 : null;
+  const wrStr = wr !== null ? wr.toFixed(1) + '%' : '—';
+  const cls   = wr !== null ? wrClass(wr) : '';
+
+  let rows = '';
+  for (const c of stats.civList) {
+    const pct = Math.round(c.winRate);
+    const name = CIV_NAMES[c.civ] || c.civ;
+    const icon = civIconUrl(c.civ);
+    const color = barColor(c.winRate);
+    rows += `
+      <div class="civ-row">
+        <img class="civ-icon" src="${icon}" alt="${name}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <span class="civ-icon-fb" style="display:none">${c.civ.slice(0,3).toUpperCase()}</span>
+        <span class="civ-name">${name}</span>
+        <span class="civ-games">${c.wins}W / ${c.games}G</span>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${color}"></div></div>
+        <span class="civ-wr" style="color:${color}">${pct}%</span>
+      </div>`;
+  }
+  if (!rows) rows = `<div class="no-data">No ${label} data for this selection</div>`;
+
+  return `
+    <div class="mode-panel">
+      <div class="mode-header">
+        <span class="mode-title">${label}</span>
+        <span class="tag ${tagCls}">${tag}</span>
+      </div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-label">Total Games</div>
+          <div class="stat-value">${stats.totalGames.toLocaleString()}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Wins</div>
+          <div class="stat-value">${stats.totalWins.toLocaleString()}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Win Rate</div>
+          <div class="stat-value ${cls}">${wrStr}</div>
+        </div>
+      </div>
+      <div class="civs-scroll">${rows}</div>
+    </div>`;
+}
+
+function renderDashboard(playerDef) {
+  const season = document.getElementById('seasonSelect').value;
+  const seasonVal = season === 'all' ? 'all' : parseInt(season, 10);
+
+  const chips = playerDef.accounts.map(a => {
+    const s = chipStatus[a.id] || 'loading';
+    return `<div class="chip ${s === 'ok' ? 'ok' : s === 'err' ? 'err' : 'loading'}">
+      <span class="dot"></span>${a.name}
+    </div>`;
+  }).join('');
+
+  const rmStats  = aggregate(cachedAccounts, 'rm_solo',  seasonVal);
+  const qmStats  = aggregate(cachedAccounts, 'qm_1v1',   seasonVal);
+  const rmPanel  = renderModePanel('Ranked 1v1',       'RANKED', 'tag-ranked', rmStats);
+  const qmPanel  = renderModePanel('Quick Match 1v1',  'QM',     'tag-qm',     qmStats);
+
+  const seasonLabel = season === 'all' ? 'All Seasons' : `Season ${season}`;
+
+  document.getElementById('main').innerHTML = `
+    <div class="player-meta">
+      <span class="player-name">${playerDef.player.toUpperCase()}</span>
+      <span class="player-sub">${playerDef.accounts.length} account${playerDef.accounts.length !== 1 ? 's' : ''} · ${seasonLabel}</span>
+    </div>
+    <div class="accounts-bar">${chips}</div>
+    <div class="modes-grid">${rmPanel}${qmPanel}</div>`;
+}
+
+// ── Season selector ───────────────────────────────────────────────────────────
+function populateSeasons(seasons) {
+  const sel = document.getElementById('seasonSelect');
+  const cur = sel.value;
+  // Keep "All Seasons" option, replace season options
+  while (sel.options.length > 1) sel.remove(1);
+  for (const s of seasons) {
+    const o = document.createElement('option');
+    o.value = s;
+    o.textContent = `Season ${s}`;
+    sel.appendChild(o);
+  }
+  // Restore selection if still valid
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  else sel.value = 'all';
+}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+async function loadPlayer() {
+  const playerName = document.getElementById('playerSelect').value;
+  const playerDef  = PLAYERS.find(p => p.player === playerName);
+  if (!playerDef) return;
+
+  document.getElementById('refreshBtn').disabled = true;
+  chipStatus = {};
+  cachedAccounts = [];
+
+  const total = playerDef.accounts.length;
+  let done = 0;
+
+  document.getElementById('main').innerHTML = `
+    <div class="loading-wrap">
+      <div class="loading-title">Loading ${playerDef.player.toUpperCase()}…</div>
+      <div class="progress-outer"><div class="progress-inner" id="prog" style="width:0%"></div></div>
+      <div class="progress-label" id="prog-label">Fetching account 1 of ${total}</div>
+    </div>`;
+
+  const results = await Promise.all(
+    playerDef.accounts.map(async (acc) => {
+      try {
+        const data = await fetchPlayer(acc.id);
+        chipStatus[acc.id] = 'ok';
+        done++;
+        const p = document.getElementById('prog');
+        const l = document.getElementById('prog-label');
+        if (p) p.style.width = Math.round((done/total)*100) + '%';
+        if (l) l.textContent = `Loaded ${done} of ${total}`;
+        return { ...acc, data };
+      } catch (e) {
+        chipStatus[acc.id] = 'err';
+        done++;
+        const p = document.getElementById('prog');
+        if (p) p.style.width = Math.round((done/total)*100) + '%';
+        return { ...acc, data: null };
+      }
+    })
+  );
+
+  cachedAccounts = results;
+  allSeasons = buildSeasonOptions(results);
+  populateSeasons(allSeasons);
+  renderDashboard(playerDef);
+  document.getElementById('refreshBtn').disabled = false;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+const playerSel = document.getElementById('playerSelect');
+PLAYERS.forEach(p => {
+  const o = document.createElement('option');
+  o.value = p.player;
+  o.textContent = p.player.toUpperCase();
+  playerSel.appendChild(o);
+});
+
+playerSel.addEventListener('change', loadPlayer);
+document.getElementById('seasonSelect').addEventListener('change', () => {
+  const playerDef = PLAYERS.find(p => p.player === playerSel.value);
+  if (playerDef && cachedAccounts.length) renderDashboard(playerDef);
+});
+document.getElementById('refreshBtn').addEventListener('click', loadPlayer);
+
+loadPlayer();
+</script>
+</body>
+</html>

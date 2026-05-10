@@ -1,0 +1,11 @@
+{
+  "name": "aoe4-warroom",
+  "version": "1.0.0",
+  "description": "AoE4 player stats aggregator dashboard",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
