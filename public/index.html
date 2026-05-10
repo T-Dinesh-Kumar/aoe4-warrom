@@ -399,8 +399,14 @@ function buildSeasonOptions(accounts) {
 }
 
 // ── Aggregate ─────────────────────────────────────────────────────────────────
-// modeKey: 'rm_solo' or 'qm_1v1'
-// season: number | 'all'
+// The aoe4world API stores real per-civ win data inside the seasons array.
+// The top-level mode.civilizations only has current-season data with 0 wins,
+// so we ALWAYS read from seasons[] and sum across them.
+// Field name variants: games_count|games  and  wins_count|wins — we try both.
+
+function g(obj) { return obj.games_count != null ? obj.games_count : (obj.games || 0); }
+function w(obj) { return obj.wins_count  != null ? obj.wins_count  : (obj.wins  || 0); }
+
 function aggregate(accounts, modeKey, season) {
   let totalGames = 0, totalWins = 0;
   const civMap = {};
@@ -410,28 +416,46 @@ function aggregate(accounts, modeKey, season) {
     const mode = acc.data.modes[modeKey];
     if (!mode) continue;
 
-    let civStats = [];
+    const seasons = mode.seasons || [];
 
     if (season === 'all') {
-      // Use top-level civilizations array
-      totalGames += (mode.games_count || 0);
-      totalWins  += (mode.wins_count  || 0);
-      civStats = mode.civilizations || [];
+      if (seasons.length > 0) {
+        // Sum across every season entry — this is where real win data lives
+        for (const s of seasons) {
+          totalGames += g(s);
+          totalWins  += w(s);
+          for (const c of (s.civilizations || [])) {
+            const key = c.civilization;
+            if (!key) continue;
+            if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
+            civMap[key].games += g(c);
+            civMap[key].wins  += w(c);
+          }
+        }
+      } else {
+        // Fallback: no seasons array, use top-level
+        totalGames += g(mode);
+        totalWins  += w(mode);
+        for (const c of (mode.civilizations || [])) {
+          const key = c.civilization;
+          if (!key) continue;
+          if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
+          civMap[key].games += g(c);
+          civMap[key].wins  += w(c);
+        }
+      }
     } else {
-      // Find matching season entry
-      const seasonEntry = (mode.seasons || []).find(s => s.season === season);
+      const seasonEntry = seasons.find(s => s.season === season);
       if (!seasonEntry) continue;
-      totalGames += (seasonEntry.games_count || 0);
-      totalWins  += (seasonEntry.wins_count  || 0);
-      civStats = seasonEntry.civilizations || [];
-    }
-
-    for (const c of civStats) {
-      const key = c.civilization;
-      if (!key) continue;
-      if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
-      civMap[key].games += (c.games_count || 0);
-      civMap[key].wins  += (c.wins_count  || 0);
+      totalGames += g(seasonEntry);
+      totalWins  += w(seasonEntry);
+      for (const c of (seasonEntry.civilizations || [])) {
+        const key = c.civilization;
+        if (!key) continue;
+        if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
+        civMap[key].games += g(c);
+        civMap[key].wins  += w(c);
+      }
     }
   }
 
