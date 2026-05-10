@@ -380,10 +380,16 @@ async function fetchPlayer(id) {
 function extractSeasons(data) {
   const seasons = new Set();
   if (!data || !data.modes) return seasons;
-  for (const modeKey of Object.keys(data.modes)) {
+  for (const modeKey of ['rm_solo', 'qm_1v1']) {
     const mode = data.modes[modeKey];
-    if (Array.isArray(mode?.seasons)) {
-      mode.seasons.forEach(s => { if (s.season !== undefined) seasons.add(s.season); });
+    if (!mode) continue;
+    // Current season
+    if (mode.season !== undefined) seasons.add(mode.season);
+    // Historical seasons
+    if (Array.isArray(mode.previous_seasons)) {
+      mode.previous_seasons.forEach(s => {
+        if (s.season !== undefined) seasons.add(s.season);
+      });
     }
   }
   return seasons;
@@ -399,46 +405,65 @@ function buildSeasonOptions(accounts) {
 }
 
 // ── Aggregate ─────────────────────────────────────────────────────────────────
-// modeKey: 'ranked' or 'qm'
-// season param kept for UI compatibility but civ data is always all-time
-// (the API does not expose per-season civ breakdowns)
+// modeKey: 'rm_solo' or 'qm_1v1'
+// season: number | 'all'  (season filter applies to totals; civ data is always all-patches)
 function aggregate(accounts, modeKey, season) {
   let totalGames = 0, totalWins = 0;
   const civMap = {};
-  const isRanked = modeKey === 'ranked';
+  const isRanked = modeKey === 'rm_solo';
 
   for (const acc of accounts) {
     if (!acc.data?.modes) continue;
     const modes = acc.data.modes;
 
-    // ── Total games / wins ──────────────────────────────────────────────────
-    // Ranked: always use rm_1v1_elo (all-time ELO tracker, most accurate)
-    // QM:     use qm_1v1
-    if (isRanked) {
-      const elo = modes.rm_1v1_elo;
-      if (elo) {
-        totalGames += (elo.games_count || 0);
-        totalWins  += (elo.wins_count  || 0);
+    // ── Total games / wins ────────────────────────────────────────────────────
+    // Ranked: rm_1v1_elo has the true all-time game counter.
+    // For season filter we fall back to rm_solo season entries for totals.
+    // QM: qm_1v1 top-level is accurate.
+    if (season === 'all') {
+      if (isRanked) {
+        const elo = modes.rm_1v1_elo;
+        if (elo) {
+          totalGames += (elo.games_count || 0);
+          totalWins  += (elo.wins_count  || 0);
+        }
+      } else {
+        const qm = modes.qm_1v1;
+        if (qm) {
+          totalGames += (qm.games_count || 0);
+          totalWins  += (qm.wins_count  || 0);
+        }
       }
     } else {
-      const qm = modes.qm_1v1;
-      if (qm) {
-        totalGames += (qm.games_count || 0);
-        totalWins  += (qm.wins_count  || 0);
+      // Per-season totals come from previous_seasons entries
+      const mode = modes[modeKey];
+      if (mode) {
+        const entry = (mode.previous_seasons || []).find(s => s.season === season);
+        if (entry) {
+          totalGames += (entry.games_count || 0);
+          totalWins  += (entry.wins_count  || 0);
+        } else if (mode.season === season) {
+          // Current season
+          totalGames += (mode.games_count || 0);
+          totalWins  += (mode.wins_count  || 0);
+        }
       }
     }
 
-    // ── Civ stats: read from match-history arrays injected by the proxy ─────
-    // ranked_civs and qm_civs are accurate all-time counts from /games pagination
-    const civKey = isRanked ? 'ranked_civs' : 'qm_civs';
-    const civStats = modes[civKey] || [];
+    // ── Civ stats ─────────────────────────────────────────────────────────────
+    // rm_solo.civilizations and qm_1v1.civilizations are all-patches arrays.
+    // They have: civilization, games_count, win_rate (%) — but NO wins_count.
+    // Calculate wins = round(win_rate / 100 * games_count).
+    const mode = modes[modeKey];
+    const civStats = mode?.civilizations || [];
 
     for (const c of civStats) {
       const key = c.civilization;
-      if (!key) continue;
+      if (!key || !c.games_count) continue;
+      const wins = Math.round((c.win_rate / 100) * c.games_count);
       if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
-      civMap[key].games += (c.games_count || 0);
-      civMap[key].wins  += (c.wins_count  || 0);
+      civMap[key].games += c.games_count;
+      civMap[key].wins  += wins;
     }
   }
 
@@ -526,8 +551,8 @@ function renderDashboard(playerDef) {
     </div>`;
   }).join('');
 
-  const rmStats  = aggregate(cachedAccounts, 'ranked', seasonVal);
-  const qmStats  = aggregate(cachedAccounts, 'qm',     seasonVal);
+  const rmStats  = aggregate(cachedAccounts, 'rm_solo',  seasonVal);
+  const qmStats  = aggregate(cachedAccounts, 'qm_1v1',   seasonVal);
   const rmPanel  = renderModePanel('Ranked 1v1',       'RANKED', 'tag-ranked', rmStats);
   const qmPanel  = renderModePanel('Quick Match 1v1',  'QM',     'tag-qm',     qmStats);
 
