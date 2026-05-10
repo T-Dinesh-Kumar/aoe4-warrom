@@ -379,15 +379,11 @@ async function fetchPlayer(id) {
 // ── Season helpers ────────────────────────────────────────────────────────────
 function extractSeasons(data) {
   const seasons = new Set();
-  if (!data?.modes) return seasons;
-  for (const modeKey of ['rm_1v1', 'qm_1v1']) {
+  if (!data || !data.modes) return seasons;
+  for (const modeKey of Object.keys(data.modes)) {
     const mode = data.modes[modeKey];
-    if (!mode) continue;
-    // Current season
-    if (mode.season != null) seasons.add(mode.season);
-    // Previous seasons
-    for (const ps of (mode.previous_seasons || [])) {
-      if (ps.season != null) seasons.add(ps.season);
+    if (Array.isArray(mode?.seasons)) {
+      mode.seasons.forEach(s => { if (s.season !== undefined) seasons.add(s.season); });
     }
   }
   return seasons;
@@ -402,81 +398,47 @@ function buildSeasonOptions(accounts) {
   return Array.from(all).sort((a, b) => b - a);
 }
 
-// ── API structure (confirmed from debug endpoint) ────────────────────────────
-// - rm_1v1_elo  → all-time ranked game count (games_count/wins_count), NO civs
-// - rm_1v1      → current season ranked, HAS civilizations[], HAS previous_seasons[]
-// - qm_1v1      → current season QM,     HAS civilizations[], HAS previous_seasons[]
-// - Civ objects: { civilization, games_count, win_rate, pick_rate }
-//   wins_count does NOT exist — calculate: wins = round(win_rate/100 * games_count)
-// - previous_seasons: array of past season objects, each with civilizations[]
-
-function civWins(c) {
-  return Math.round((c.win_rate || 0) / 100 * (c.games_count || 0));
-}
-
-function addCivs(civMap, civArr) {
-  for (const c of (civArr || [])) {
-    const key = c.civilization;
-    if (!key) continue;
-    if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
-    civMap[key].games += (c.games_count || 0);
-    civMap[key].wins  += civWins(c);
-  }
-}
-
-// modeKey for display: 'ranked' or 'qm'
-// internally maps to: ranked -> rm_1v1, qm -> qm_1v1
-// season: number | 'all'
+// ── Aggregate ─────────────────────────────────────────────────────────────────
+// modeKey: 'ranked' or 'qm'
+// season param kept for UI compatibility but civ data is always all-time
+// (the API does not expose per-season civ breakdowns)
 function aggregate(accounts, modeKey, season) {
   let totalGames = 0, totalWins = 0;
   const civMap = {};
-
-  // For total game counts we read from the ELO tracker (all-time)
-  const eloKey = modeKey === 'ranked' ? 'rm_1v1_elo' : null;
-  // For civ breakdown we read from the seasonal mode
-  const civKey  = modeKey === 'ranked' ? 'rm_1v1'     : 'qm_1v1';
+  const isRanked = modeKey === 'ranked';
 
   for (const acc of accounts) {
     if (!acc.data?.modes) continue;
+    const modes = acc.data.modes;
 
-    // ── Total game count ──
-    if (eloKey) {
-      const elo = acc.data.modes[eloKey];
+    // ── Total games / wins ──────────────────────────────────────────────────
+    // Ranked: always use rm_1v1_elo (all-time ELO tracker, most accurate)
+    // QM:     use qm_1v1
+    if (isRanked) {
+      const elo = modes.rm_1v1_elo;
       if (elo) {
         totalGames += (elo.games_count || 0);
         totalWins  += (elo.wins_count  || 0);
       }
     } else {
-      // QM: no separate elo tracker, use mode directly
-      const qm = acc.data.modes[civKey];
+      const qm = modes.qm_1v1;
       if (qm) {
         totalGames += (qm.games_count || 0);
         totalWins  += (qm.wins_count  || 0);
       }
     }
 
-    // ── Civ breakdown ──
-    const civMode = acc.data.modes[civKey];
-    if (!civMode) continue;
+    // ── Civ stats: read from match-history arrays injected by the proxy ─────
+    // ranked_civs and qm_civs are accurate all-time counts from /games pagination
+    const civKey = isRanked ? 'ranked_civs' : 'qm_civs';
+    const civStats = modes[civKey] || [];
 
-    if (season === 'all') {
-      // Current season civs
-      addCivs(civMap, civMode.civilizations);
-      // All previous seasons civs
-      for (const ps of (civMode.previous_seasons || [])) {
-        addCivs(civMap, ps.civilizations);
-      }
-    } else {
-      // Current season matches selected season number
-      if (civMode.season === season) {
-        addCivs(civMap, civMode.civilizations);
-      }
-      // Check previous seasons
-      for (const ps of (civMode.previous_seasons || [])) {
-        if (ps.season === season) {
-          addCivs(civMap, ps.civilizations);
-        }
-      }
+    for (const c of civStats) {
+      const key = c.civilization;
+      if (!key) continue;
+      if (!civMap[key]) civMap[key] = { games: 0, wins: 0 };
+      civMap[key].games += (c.games_count || 0);
+      civMap[key].wins  += (c.wins_count  || 0);
     }
   }
 
